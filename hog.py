@@ -1,23 +1,191 @@
-"""The Game of Hog."""
+"""The Game of """
 import collections
 from math import factorial
 
 from dice import make_test_dice, four_sided, six_sided
-from ucb import main, trace, log_current_line, interact
-import operator
-from random import randint
+from ucb import main
 
 GOAL_SCORE = 100  # The goal of Hog is to score 100 points.
 
-
-######################
-# Phase 1: Simulator #
-######################
-
 probability_dict = None
 best_chances_dict = None
+primes = None
+vs_former_final_strategy_file = "best_chances1.txt"
+vs_always_5_file = "against_5.txt"
+# vs_always_5_file = "against_5_2.txt"
+# probabilities_file_name = "probabilities_2.txt"
+probabilities_file_name = "probabilities.txt"
 
 
+# region Strategy Lib
+def get_primes():
+    global primes
+    if primes is None:
+        with open("primes1000.txt") as file:
+            primes = list(map(int, file.readlines()))
+    return primes
+
+
+def is_prime(n):
+    return n in get_primes()
+
+
+def previous_prime(n):
+    """
+
+    :param n:
+    :return:
+    >>> previous_prime(3)
+    2
+    >>> previous_prime(5)
+    3
+    """
+    i = get_primes().index(n)
+    if i == 0:
+        return None
+    else:
+        return get_primes()[i - 1]
+
+
+def next_prime(x):
+    """
+
+    :param x:
+    :return:
+    >>> next_prime(2)
+    3
+    >>> next_prime(3)
+    5
+    >>> next_prime(5)
+    7
+    >>> next_prime(7)
+    11
+    >>> next_prime(4)
+    Traceback (most recent call last):
+      ...
+    AssertionError
+    """
+    assert type(x) == int
+    assert is_prime(x)
+    i = get_primes().index(x)
+    return get_primes()[i + 1]
+
+
+def is_win(score, opponent_score, goal=100):
+    return score >= goal > opponent_score
+
+
+def is_loss(score, opponent_score, goal=100):
+    return is_win(opponent_score, score, goal)
+
+
+def free_bacon(opponent_score):
+    return max(map(int, str(opponent_score))) + 1
+
+
+def select_dice(score, opponent_score):
+    """Select six-sided dice unless the sum of SCORE and OPPONENT_SCORE is a
+    multiple of 7, in which case select four-sided dice (Hog wild).
+    """
+    # BEGIN Question 3
+    if (score + opponent_score) % 7 == 0:
+        return four_sided
+    return six_sided
+    # END Question 3
+
+
+def is_swap(score0, score1):
+    """Returns whether the last two digits of SCORE0 and SCORE1 are reversed
+    versions of each other, such as 19 and 91.
+    >>> is_swap(19, 91)
+    True
+    >>> is_swap(9, 90)
+    True
+    >>> is_swap(90, 9)
+    True
+    >>> is_swap(1, 1)
+    False
+    """
+    # BEGIN Question 4
+    a = score0 % 100
+    b1 = score1 % 10
+    b2 = score1 % 100 // 10
+    return a == b1 * 10 + b2
+    # END Question 4
+
+
+def last_2(score):
+    """
+
+    :param score:
+    :return:
+    >>> last_2(180)
+    '80'
+    """
+    return ('0' + str(score % 100))[-2:]
+
+
+def hogtimus_prime(turn_score):
+    if is_prime(turn_score):
+        return next_prime(turn_score)
+    return turn_score
+
+
+# endregion
+
+# region Basic Strategies
+def bacon_strategy(score, opponent_score, margin=8, num_rolls=5):
+    """This strategy rolls 0 dice if that gives at least MARGIN points,
+    and rolls NUM_ROLLS otherwise.
+
+    >>> bacon_strategy(20, 20, margin=5, num_rolls=4)
+    0
+    >>> bacon_strategy(20, 30, margin=5, num_rolls=4)
+    4
+
+    """
+    # BEGIN Question 8
+    if hogtimus_prime(free_bacon(opponent_score)) >= margin:
+        return 0
+    return num_rolls
+    # END Question 8
+
+
+def swap_strategy(score, opponent_score, num_rolls=5):
+    """This strategy rolls 0 dice when it results in a beneficial swap and
+    rolls NUM_ROLLS otherwise.
+    """
+    # BEGIN Question 9
+    turn_score = hogtimus_prime(free_bacon(opponent_score))
+    if is_swap(score + turn_score, opponent_score) and opponent_score > (score + turn_score):
+        return 0
+    return num_rolls
+    # END Question 9
+
+
+def always_roll(n):
+    """Return a strategy that always rolls N dice.
+
+    A strategy is a function that takes two total scores as arguments
+    (the current player's score, and the opponent's score), and returns a
+    number of dice that the current player will roll this turn.
+
+    >>> strategy = always_roll(5)
+    >>> strategy(0, 0)
+    5
+    >>> strategy(99, 99)
+    5
+    """
+
+    def strategy(score, opponent_score):
+        return n
+
+    return strategy
+
+
+# endregion
+
+# region Simulation
 def roll_dice(num_rolls, dice=six_sided):
     """Simulate rolling the DICE exactly NUM_ROLLS times. Return the sum of
     the outcomes unless any of the outcomes is 1. In that case, return 0.
@@ -31,10 +199,6 @@ def roll_dice(num_rolls, dice=six_sided):
         return 0
     return sum(rolls)
     # END Question 1
-
-
-def free_bacon(opponent_score):
-    return max(map(int, str(opponent_score))) + 1
 
 
 def take_turn(num_rolls, opponent_score, dice=six_sided):
@@ -63,42 +227,6 @@ def take_turn(num_rolls, opponent_score, dice=six_sided):
     # END Question 2
 
 
-def select_dice(score, opponent_score):
-    """Select six-sided dice unless the sum of SCORE and OPPONENT_SCORE is a
-    multiple of 7, in which case select four-sided dice (Hog wild).
-    """
-    # BEGIN Question 3
-    if (score + opponent_score) % 7 == 0:
-        return four_sided
-    return six_sided
-    # END Question 3
-
-
-def is_swap(score0, score1):
-    """Returns whether the last two digits of SCORE0 and SCORE1 are reversed
-    versions of each other, such as 19 and 91.
-    >>> is_swap(19, 91)
-    True
-    """
-    # BEGIN Question 4
-    a = score0 % 100
-    b1 = score1 % 10
-    b2 = score1 % 100 // 10
-    return a == b1 * 10 + b2
-    # END Question 4
-
-
-def last_2(score):
-    """
-
-    :param score:
-    :return:
-    >>> last_2(180)
-    '80'
-    """
-    return ('0' + str(score % 100))[-2:]
-
-
 def other(who):
     """Return the other player, for a player WHO numbered 0 or 1.
 
@@ -108,55 +236,6 @@ def other(who):
     0
     """
     return 1 - who
-
-
-def is_prime(x):
-    """
-
-    :param x:
-    :return:
-    >>> is_prime(-1)
-    False
-    >>> is_prime(0)
-    False
-    >>> is_prime(1)
-    False
-    >>> is_prime(2)
-    True
-    >>> is_prime(4)
-    False
-    >>> is_prime(5)
-    True
-    >>> is_prime(12)
-    False
-    """
-    if x < 2:
-        return False
-    assert type(x) == int
-    return next((False for y in range(2, int(x ** (1 / 2) + 1)) if x % y == 0), True)
-
-
-def next_prime(x):
-    """
-
-    :param x:
-    :return:
-    >>> next_prime(2)
-    3
-    >>> next_prime(3)
-    5
-    >>> next_prime(5)
-    7
-    >>> next_prime(7)
-    11
-    >>> next_prime(4)
-    Traceback (most recent call last):
-      ...
-    AssertionError
-    """
-    assert type(x) == int
-    assert is_prime(x)
-    return next(y for y in range(x + 1, 100) if is_prime(y))
 
 
 def play(strategy0, strategy1, score0=0, score1=0, goal=GOAL_SCORE):
@@ -201,33 +280,9 @@ def play(strategy0, strategy1, score0=0, score1=0, goal=GOAL_SCORE):
     return score0, score1
 
 
-#######################
-# Phase 2: Strategies #
-#######################
+# endregion
 
-
-def always_roll(n):
-    """Return a strategy that always rolls N dice.
-
-    A strategy is a function that takes two total scores as arguments
-    (the current player's score, and the opponent's score), and returns a
-    number of dice that the current player will roll this turn.
-
-    >>> strategy = always_roll(5)
-    >>> strategy(0, 0)
-    5
-    >>> strategy(99, 99)
-    5
-    """
-
-    def strategy(score, opponent_score):
-        return n
-
-    return strategy
-
-
-# Experiments
-
+# region Experimenting
 def make_averaged(fn, num_samples=1000):
     """Return a function that returns the average_value of FN when called.
 
@@ -316,133 +371,138 @@ def run_experiments():
         print('swap_strategy win rate:', average_win_rate(swap_strategy))
 
 
-def test_final_strategy(score0, score1, num_samples):
+# endregion
+
+# region Command Line Interface
+@main
+def run(*args):
+    """Read in the command-line argument and calls corresponding functions.
+
+    This function uses Python syntax/techniques not yet covered in this course.
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="Play Hog")
+    parser.add_argument('--run_experiments', '-r', action='store_true',
+                        help='Runs strategy experiments')
+
+    args = parser.parse_args()
+
+    if args.run_experiments:
+        run_experiments()
+
+
+# endregion
+
+# region Final Strategy
+def get_score_map(n, dice, opponent_score):
     """
 
-    :param score0:
-    :param score1:
-    :param num_samples:
-    :return:
-    >>> test_final_strategy(0, 0, 10000)
-    # >>> i = 99
-    # >>> while i >= 0:
-    # ...     test_final_strategy(i, i, 100)
-    # ...     i -= 1
-    """
-    print('(%2d, %2d):' % (score0, score1),
-          average_win_rate(final_strategy, num_samples=num_samples, score0=score0, score1=score1))
 
-
-# Strategies
-
-def hogtimus_prime(turn_score):
-    if is_prime(turn_score):
-        return next_prime(turn_score)
-    return turn_score
-
-
-def bacon_strategy(score, opponent_score, margin=8, num_rolls=5):
-    """This strategy rolls 0 dice if that gives at least MARGIN points,
-    and rolls NUM_ROLLS otherwise.
-
-    >>> bacon_strategy(20, 20, margin=5, num_rolls=4)
-    0
-    >>> bacon_strategy(20, 30, margin=5, num_rolls=4)
-    4
-
-    """
-    # BEGIN Question 8
-    if hogtimus_prime(free_bacon(opponent_score)) >= margin:
-        return 0
-    return num_rolls
-    # END Question 8
-
-
-def swap_strategy(score, opponent_score, num_rolls=5):
-    """This strategy rolls 0 dice when it results in a beneficial swap and
-    rolls NUM_ROLLS otherwise.
-    """
-    # BEGIN Question 9
-    turn_score = hogtimus_prime(free_bacon(opponent_score))
-    if is_swap(score + turn_score, opponent_score) and opponent_score > (score + turn_score):
-        return 0
-    return num_rolls
-    # END Question 9
-
-
-def final_strategy(score, opponent_score, against=always_roll(5)):
-    """Write a brief description of your final strategy.
-
-    """
-    # BEGIN Question 10
-
-    return get_best_move(score, opponent_score, against)[0]
-    # END Question 10
-
-
-def is_win(score, opponent_score, goal=100):
-    return score >= goal > opponent_score
-
-
-def is_loss(score, opponent_score, goal=100):
-    return is_win(opponent_score, score, goal)
-
-
-def parse(line):
-    line_split = line.split(",")
-    return (int(line_split[0]), int(line_split[1])), (int(line_split[2]), float(line_split[3]))
-
-
-def get_best_move(score, opponent_score, against=always_roll(5)):
-    """
-
-    :param score:
     :param opponent_score:
+    :param n:
     :return:
-    >>> get_best_move(99, 99)
-    (0, 1.0)
-    >>> get_best_move(90, 99)
-    (0, 1.0)
+    >>> get_score_map(3,four_sided, 95)
     """
-    if (score, opponent_score) in get_best_chances_dict(against):
-        return get_best_chances_dict()[(score, opponent_score)]
-    best_n, best_chance = 0, 0
-    for n in range(0, 11):
-        outcome_map = get_outcome_map(n, score, opponent_score)
-        outcome_chance = 0
-        for outcome in outcome_map:
-            count = outcome_map[outcome]
-            if is_win(outcome[0], outcome[1]):
-                outcome_chance += count * 1.0
-            elif is_loss(outcome[0], outcome[1]):
-                outcome_chance += count * 0.0
-            else:
-                if against == final_strategy:
-                    outcome_chance += count * (1 - get_best_move(outcome[1], outcome[0])[1])
-                else:
-                    sub_outcome_chance = 0
-                    sub_outcome_map = get_outcome_map(5, outcome[1], outcome[0])
-                    for sub_outcome in sub_outcome_map:
-                        sub_count = sub_outcome_map[sub_outcome]
-                        if is_win(sub_outcome[1], sub_outcome[0]):
-                            sub_outcome_chance += sub_count * 1.0
-                        elif is_loss(sub_outcome[1], sub_outcome[0]):
-                            sub_outcome_chance += sub_count * 0.0
-                        else:
-                            sub_outcome_chance += sub_count * get_best_move(sub_outcome[1], sub_outcome[0])[1]
-                    outcome_chance += count * sub_outcome_chance
-
-        if outcome_chance > best_chance:
-            best_n, best_chance = n, outcome_chance
-
-    if against == final_strategy:
-        file_name = "best_chances1.txt"
+    if n == 0:
+        return {free_bacon(opponent_score): 1}
+    if dice == six_sided:
+        sides = 6
     else:
-        file_name = "against_5.txt"
-    with open(file_name, "a") as file:
-        get_best_chances_dict(against)[(score, opponent_score)] = (best_n, best_chance)
-        file.write("%d,%d,%d,%f\n" % (score, opponent_score, best_n, best_chance))
-    return best_n, best_chance
+        sides = 4
+
+    score_map = collections.defaultdict(lambda: 0)
+    score_map[0] = prob_rolling_1(n, sides)
+    for p in range(n * 2, n * sides + 1):
+        if p == 2:
+            score_map[p] = 0  # 2 is the first prime, so there's no way we can score 2
+        elif is_prime(p):
+            previous = previous_prime(p)
+            if previous >= n * 2:
+                score_map[p] = get_probability(previous, n, sides)
+            else:
+                score_map[p] = 0
+        else:
+            score_map[p] = get_probability(p, n, sides)
+
+    return score_map
+
+
+def prob_rolling_1(n, sides):
+    """
+
+    :param n:
+    :param sides:
+    :return:
+    >>> prob_rolling_1(1, 4)
+    0.25
+    >>> prob_rolling_1(2, 4)
+    0.4375
+    """
+    return 1 - (((sides - 1) / sides) ** n)
+
+
+def ncr(n, r):
+    """
+
+    :param n:
+    :param r:
+    :return:
+    >>> ncr(12, 5)
+    >>> ncr(10, 7)
+    >>> ncr(8, 3)
+    """
+    f = factorial
+    return f(n) / f(r) / f(n - r)
+
+
+def probability_parse(line):
+    line_split = line.split(",")
+    return tuple(map(int, line_split[:3])), float(line_split[3])
+
+
+def get_probability(p, n, s):
+    if (p, n, s) in get_probability_dict():
+        return probability_dict[(p, n, s)]
+    with open(probabilities_file_name, "a") as file:
+        probability = ((s - 1) / s) ** n * get_probability_normal_dice(p - n, n, s - 1)
+        file.write("%d,%d,%d,%f\n" % (p, n, s, probability))
+        get_probability_dict()[(p, n, s)] = probability
+        return probability
+
+
+def get_probability_normal_dice(p, n, s):
+    """
+
+    :param p: sum
+    :param n: num rolls
+    :param s: num sides
+    :return:
+    >>> get_probability_normal_dice(7, 2, 6)
+    0.16666666666666666
+    """
+    return 1 / s ** n * sum([(-1) ** k * ncr(n, k) * ncr(p - s * k - 1, n - 1) for k in range(0, int((p - n) / s) + 1)])
+
+
+def get_probability_dict():
+    global probability_dict
+    if probability_dict is None:
+        with open(probabilities_file_name, "r") as file:
+            lines = file.readlines()
+            probability_dict = dict(probability_parse(line) for line in lines)
+    return probability_dict
+
+
+def get_best_chances_dict(against=always_roll(5)):
+    global best_chances_dict
+    if against == final_strategy:
+        file_name = vs_former_final_strategy_file
+    else:
+        file_name = vs_always_5_file
+    if best_chances_dict is None:
+        with open(file_name, "r") as file:
+            lines = file.readlines()
+            best_chances_dict = dict(parse(line) for line in lines)
+    return best_chances_dict
 
 
 def get_outcome_map(n, score, opponent_score):
@@ -478,120 +538,110 @@ def get_outcome_map(n, score, opponent_score):
     return outcome_map
 
 
-def get_score_map(n, dice, opponent_score):
+def throws(f, *args):
+    try:
+        f(*args)
+    except:
+        return True
+    return False
+
+
+def get_best_move(score, opponent_score, against=always_roll(5)):
     """
 
-
+    :param score:
     :param opponent_score:
-    :param n:
     :return:
-    >>> get_score_map(3,four_sided, 95)
+    >>> get_best_move(99, 99)
+    (0, 1.0)
+    >>> get_best_move(90, 99)
+    (0, 1.0)
     """
-    if n == 0:
-        return {free_bacon(opponent_score): 1}
-    if dice == six_sided:
-        sides = 6
-    else:
-        sides = 4
+    if (score, opponent_score) in get_best_chances_dict(against):
+        return get_best_chances_dict()[(score, opponent_score)]
+    best_n, best_chance = 0, 0
+    for n in range(0, 11):
+        outcome_chance = get_outcome_chance(score, opponent_score, n, against)
 
-    score_map = collections.defaultdict(lambda: 0)
-    score_map[0] = prob_rolling_1(n, sides)
-    for p in range(n * 2, n * sides + 1):
-        score_map[p] = get_probability(p, n, sides)
+        if outcome_chance > best_chance:
+            best_n, best_chance = n, outcome_chance
 
-    return score_map
-
-
-def prob_rolling_1(n, sides):
-    """
-
-    :param n:
-    :param sides:
-    :return:
-    >>> prob_rolling_1(1, 4)
-    0.25
-    >>> prob_rolling_1(2, 4)
-    0.4375
-    """
-    return 1 - (((sides - 1) / sides) ** n)
-
-
-def ncr(n, r):
-    f = factorial
-    return f(n) / f(r) / f(n - r)
-
-
-def probability_parse(line):
-    line_split = line.split(",")
-    return tuple(map(int, line_split[:3])), float(line_split[3])
-
-
-def get_probability(p, n, s):
-    if (p, n, s) in get_probability_dict():
-        return probability_dict[(p, n, s)]
-    with open("probabilities.txt", "a") as file:
-        probability = ((s - 1) / s) ** n * get_probability_normal_dice(p - n, n, s - 1)
-        file.write("%d,%d,%d,%f\n" % (p, n, s, probability))
-        get_probability_dict()[(p, n, s)] = probability
-        return probability
-
-
-def get_probability_normal_dice(p, n, s):
-    """
-
-    :param p: sum
-    :param n: num rolls
-    :param s: num sides
-    :return:
-    >>> get_probability_normal_dice(7, 2, 6)
-    0.16666666666666666
-    """
-    return 1 / s ** n * sum([(-1) ** k * ncr(n, k) * ncr(p - s * k - 1, n - 1) for k in range(0, int((p - n) / s) + 1)])
-
-
-def get_probability_dict():
-    global probability_dict
-    if probability_dict is None:
-        with open("probabilities.txt", "r") as file:
-            lines = file.readlines()
-            probability_dict = dict(probability_parse(line) for line in lines)
-    return probability_dict
-
-
-def get_best_chances_dict(against=always_roll(5)):
-    global best_chances_dict
     if against == final_strategy:
-        file_name = "best_chances1.txt"
+        file_name = vs_former_final_strategy_file
     else:
-        file_name = "against_5.txt"
-    if best_chances_dict is None:
-        with open(file_name, "r") as file:
-            lines = file.readlines()
-            best_chances_dict = dict(parse(line) for line in lines)
-    return best_chances_dict
+        file_name = vs_always_5_file
+    with open(file_name, "a") as file:
+        get_best_chances_dict(against)[(score, opponent_score)] = (best_n, best_chance)
+        file.write("%d,%d,%d,%f\n" % (score, opponent_score, best_n, best_chance))
+    return best_n, best_chance
 
 
-##########################
-# Command Line Interface #
-##########################
+def get_outcome_chance(score, opponent_score, n, against):
+    outcome_map = get_outcome_map(n, score, opponent_score)
+    outcome_chance = 0
+    for outcome in outcome_map:
+        count = outcome_map[outcome]
+        if is_win(outcome[0], outcome[1]):
+            outcome_chance += count * 1.0
+        elif is_loss(outcome[0], outcome[1]):
+            outcome_chance += count * 0.0  # should just be pass
+        else:
+            if against == final_strategy:
+                outcome_chance += count * (1 - get_best_move(outcome[1], outcome[0])[1])
+            else:
+                sub_outcome_chance = 0
+                sub_outcome_map = get_outcome_map(5, outcome[1], outcome[0])
+                for sub_outcome in sub_outcome_map:
+                    sub_count = sub_outcome_map[sub_outcome]
+                    if is_win(sub_outcome[1], sub_outcome[0]):
+                        sub_outcome_chance += sub_count * 1.0
+                    elif is_loss(sub_outcome[1], sub_outcome[0]):
+                        sub_outcome_chance += sub_count * 0.0
+                    else:
+                        sub_outcome_chance += sub_count * get_best_move(sub_outcome[1], sub_outcome[0])[1]
+                outcome_chance += count * sub_outcome_chance
+    return outcome_chance
 
 
-# Note: Functions in this section do not need to be changed. They use features
-#       of Python not yet covered in the course.
+def parse(line):
+    line_split = line.split(",")
+    return (int(line_split[0]), int(line_split[1])), (int(line_split[2]), float(line_split[3]))
 
 
-@main
-def run(*args):
-    """Read in the command-line argument and calls corresponding functions.
+def final_strategy(score, opponent_score, against=always_roll(5)):
+    """Write a brief description of your final strategy.
 
-    This function uses Python syntax/techniques not yet covered in this course.
     """
-    import argparse
-    parser = argparse.ArgumentParser(description="Play Hog")
-    parser.add_argument('--run_experiments', '-r', action='store_true',
-                        help='Runs strategy experiments')
+    # BEGIN Question 10
 
-    args = parser.parse_args()
+    return get_best_move(score, opponent_score, against)[0]
+    # END Question 10
 
-    if args.run_experiments:
-        run_experiments()
+
+def test_final_strategy(score0, score1, num_samples):
+    """
+
+    :param score0:
+    :param score1:
+    :param num_samples:
+    :return:
+    >>> test_final_strategy(0, 0, 1000)
+    """
+    print('(%2d, %2d):' % (score0, score1),
+          average_win_rate(final_strategy, num_samples=num_samples, score0=score0, score1=score1))
+
+
+def generate_strategy():
+    """
+
+    :return:
+    >>> score = 99
+    >>> while score >= 0:
+    ...     opp = 99
+    ...     while opp >= 0:
+    ...         final_strategy(score, opp)
+    ...         opp -= 1
+    ...     score -= 1
+    """
+
+# endregion

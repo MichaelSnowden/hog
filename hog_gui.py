@@ -4,13 +4,14 @@ This file uses many features of Python not yet covered in the course.  A lab
 later in the semester will review its implementation and let you extend it.
 """
 
+import tkinter as tk
+from tkinter import *
+import argparse
+
 import hog
 import dice
 from ucb import main
 
-import tkinter as tk
-from tkinter import *
-import argparse
 
 #############
 # Utilities #
@@ -241,7 +242,7 @@ class HogGUI(Frame):
         if self.computer and self.who == self.turn:
             self.update()
             self.after(DELAY)
-            result = hog.final_strategy(score, opp_score)
+            result = my_strategy.final_strategy(score, opp_score)
         else:
             self.roll_entry.focus_set()
             self.wait_variable(self.roll_verified)
