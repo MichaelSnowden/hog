@@ -5,7 +5,7 @@ from math import factorial
 from dice import make_test_dice, four_sided, six_sided
 from ucb import main
 
-GOAL_SCORE = 100  # The goal of Hog is to assert your superior intelligence
+GOAL_SCORE = 100  # The goal of Hog is to score 100 points.
 
 probability_dict = None
 best_chances_dict = None
