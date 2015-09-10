@@ -11,7 +11,7 @@ probability_dict = None
 best_chances_dict = None
 primes = None
 vs_former_final_strategy_file = "best_chances1.txt"
-vs_always_5_file = "against_5.txt"
+vs_always_5_file = "against_5_with_primes_fix.txt"
 # vs_always_5_file = "against_5_2.txt"
 # probabilities_file_name = "probabilities_2.txt"
 probabilities_file_name = "probabilities.txt"
@@ -416,11 +416,8 @@ def get_score_map(n, dice, opponent_score):
         if p == 2:
             score_map[p] = 0  # 2 is the first prime, so there's no way we can score 2
         elif is_prime(p):
-            previous = previous_prime(p)
-            if previous >= n * 2:
-                score_map[p] = get_probability(previous, n, sides)
-            else:
-                score_map[p] = 0
+            next_p = next_prime(p)
+            score_map[next_p] = get_probability(p, n, sides)
         else:
             score_map[p] = get_probability(p, n, sides)
 
@@ -625,7 +622,7 @@ def test_final_strategy(score0, score1, num_samples):
     :param score1:
     :param num_samples:
     :return:
-    >>> test_final_strategy(0, 0, 1000)
+    >>> test_final_strategy(0, 0, 10000)
     """
     print('(%2d, %2d):' % (score0, score1),
           average_win_rate(final_strategy, num_samples=num_samples, score0=score0, score1=score1))
